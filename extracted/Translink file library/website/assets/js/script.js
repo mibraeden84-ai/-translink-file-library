@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (brandSelect && modelSelect) {
         brandSelect.addEventListener('change', function() {
             const brandId = this.value;
-            modelSelect.innerHTML = '<option value="">— All / None —</option>';
+            modelSelect.innerHTML = '<option value="">â€” All / None â€”</option>';
             if (!brandId) return;
             fetch('upload_handler.php?action=models&brand_id=' + brandId)
                 .then(r => r.json())
@@ -151,7 +151,9 @@ function submitUploadLegacy(e) {
     const status = document.getElementById('uploadStatus');
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    btn.setAttribute('aria-busy', 'true');
+    btn.classList.add('is-uploading');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span class="btn-upload-text">Uploading File</span>';
     status.textContent = '';
     status.className = 'upload-status';
 
@@ -162,24 +164,32 @@ function submitUploadLegacy(e) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            status.textContent = '✅ ' + data.message;
+            btn.disabled = false;
+            btn.setAttribute('aria-busy', 'false');
+            btn.classList.remove('is-uploading');
+            btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
+            status.textContent = 'Upload complete. ' + data.message;
             status.className = 'upload-status success';
             setTimeout(function() {
                 closeUploadModal();
                 location.reload();
             }, 1200);
         } else {
-            status.textContent = '❌ ' + data.message;
+            status.textContent = 'Upload failed. ' + data.message;
             status.className = 'upload-status error';
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+            btn.setAttribute('aria-busy', 'false');
+            btn.classList.remove('is-uploading');
+            btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
         }
     })
     .catch(err => {
-        status.textContent = '❌ Upload failed. Check server.';
+        status.textContent = 'Upload failed. Check server.';
         status.className = 'upload-status error';
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+        btn.setAttribute('aria-busy', 'false');
+        btn.classList.remove('is-uploading');
+        btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
     });
 }
 
@@ -191,7 +201,9 @@ function submitUpload(e) {
     const status = document.getElementById('uploadStatus');
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    btn.setAttribute('aria-busy', 'true');
+    btn.classList.add('is-uploading');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span class="btn-upload-text">Uploading File</span>';
     status.textContent = 'Preparing upload...';
     status.className = 'upload-status';
 
@@ -218,8 +230,16 @@ function submitUpload(e) {
         }
 
         if (xhr.status >= 200 && xhr.status < 300 && data && data.success) {
+            btn.disabled = false;
+            btn.setAttribute('aria-busy', 'false');
+            btn.classList.remove('is-uploading');
+            btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
             status.textContent = 'Upload complete. ' + data.message;
             status.className = 'upload-status success';
+            setTimeout(function() {
+                status.className = 'upload-status';
+                status.textContent = '';
+            }, 700);
             setTimeout(function() {
                 closeUploadModal();
                 location.reload();
@@ -230,14 +250,18 @@ function submitUpload(e) {
         status.textContent = (data && data.message) ? data.message : 'Upload failed. Check server.';
         status.className = 'upload-status error';
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+        btn.setAttribute('aria-busy', 'false');
+        btn.classList.remove('is-uploading');
+        btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
     };
 
     xhr.onerror = function() {
         status.textContent = 'Upload failed. Check server.';
         status.className = 'upload-status error';
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+        btn.setAttribute('aria-busy', 'false');
+        btn.classList.remove('is-uploading');
+        btn.innerHTML = '<i class="fas fa-upload" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
     };
 
     xhr.send(formData);

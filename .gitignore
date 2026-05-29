@@ -7,6 +7,7 @@ Thumbs.db
 
 # PHP
 config.php
+!extracted/Translink file library/website/config.php
 
 # Uploads (keep structure, not files)
 extracted/Translink file library/website/uploads/*

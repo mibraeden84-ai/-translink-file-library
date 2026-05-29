@@ -57,7 +57,8 @@
         </div>
     </footer>
     <?php endif; ?>
-    <script src="assets/js/script.js"></script>
+    <?php $scriptVersion = @filemtime(__DIR__ . '/../assets/js/script.js') ?: time(); ?>
+    <script src="assets/js/script.js?v=<?= (int)$scriptVersion ?>"></script>
     <script>
     // Scroll reveal
     document.addEventListener('DOMContentLoaded', function() {

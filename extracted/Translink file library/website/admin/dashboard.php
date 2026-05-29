@@ -1,4 +1,7 @@
 <?php
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../includes/database.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -1536,7 +1539,11 @@ if (isAdmin()) {
         .upload-status-note { display:none; margin-top:10px; font-size:0.8rem; font-weight:700; color:#0f4678; }
         .upload-status-note.active { display:block; }
         .upload-status-note.error { color:#b42318; }
-        .btn-upload-loader { display:none; }
+        #uploadSubmitBtn .btn-upload-icon { display:inline-flex; align-items:center; justify-content:center; }
+        #uploadSubmitBtn .btn-upload-loader { display:none; }
+        #uploadSubmitBtn.is-uploading .btn-upload-icon { display:none; }
+        #uploadSubmitBtn.is-uploading .btn-upload-loader { display:inline-flex; align-items:center; justify-content:center; }
+        #uploadSubmitBtn.is-uploading .btn-upload-text { letter-spacing: 0; }
         .upload-submit-row { padding-top: 4px; border-top: 1px solid #e6eef7; margin-top: 10px; }
         .upload-submit-row .btn { width: 100%; justify-content: center; font-size: 0.95rem; padding: 11px 16px; border-radius: 10px; }
         .plus-icon-btn { width: 30px; height: 30px; padding: 0; margin-left: 8px; font-size: 0.8rem; border-radius: 9px; }
@@ -1558,6 +1565,44 @@ if (isAdmin()) {
         .flash-message { display:flex; align-items:center; gap:8px; padding:11px 13px; border-radius:10px; margin-bottom:12px; font-weight:700; border:1px solid transparent; }
         .flash-success { color:#067647; background:#ecfdf3; border-color:#abefc6; }
         .flash-error { color:#b42318; background:#fef3f2; border-color:#fecdca; }
+        .toast-stack {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            z-index: 20050;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: min(92vw, 420px);
+            pointer-events: none;
+        }
+        .app-toast {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            border-radius: 12px;
+            padding: 11px 13px;
+            border: 1px solid transparent;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+            font-size: 0.9rem;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateY(-6px);
+            animation: toastIn 0.18s ease forwards;
+            pointer-events: auto;
+            backdrop-filter: blur(2px);
+        }
+        .app-toast.success { background: #ecfdf3; border-color: #a7f3d0; color: #065f46; }
+        .app-toast.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+        .app-toast.hide {
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .inline-note { color:#475467; font-weight:400; font-size:0.8rem; }
         .control-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-top:12px; }
         .control-card { border:1px solid #d8e4f1; border-radius:12px; background:linear-gradient(180deg,#fff 0%,#f8fbff 100%); padding:12px; }
@@ -1625,6 +1670,12 @@ if (isAdmin()) {
             .header-right { flex-direction: column; align-items: stretch; }
             .profile-edit-btn { width: 100%; justify-content: center; }
             .header-user-pill { width: 100%; justify-content: flex-start; }
+            .toast-stack {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                width: auto;
+            }
             .dashboard-date-filter label,
             .dashboard-date-filter input[type="date"],
             .dashboard-date-filter .btn {
@@ -1643,6 +1694,7 @@ if (isAdmin()) {
 
 </head>
 <body class="<?= isAdmin() ? 'role-admin' : 'role-editor' ?>">
+    <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <button type="button" class="mobile-nav-toggle" id="adminMobileNavToggle" aria-label="Open navigation" aria-controls="adminSidebar" aria-expanded="false">
         <i class="fas fa-bars"></i>
@@ -1937,7 +1989,7 @@ if (isAdmin()) {
                         <span>Upload once and it appears in the user library automatically.</span>
                     </div>
                 </div>
-                <form method="POST" action="dashboard.php" enctype="multipart/form-data" class="upload-form" id="uploadForm">
+                <form method="POST" action="dashboard.php" enctype="multipart/form-data" class="upload-form" id="uploadForm" autocomplete="off">
                     <input type="hidden" name="upload" value="1">
                     <div class="form-row">
                         <div class="form-group">
@@ -2033,9 +2085,8 @@ if (isAdmin()) {
                         <div id="uploadStatusNote" class="upload-status-note"></div>
                     </div>
                     <div class="upload-submit-row">
-                        <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
+                        <button type="submit" class="btn btn-primary" id="uploadSubmitBtn" autocomplete="off">
                             <i class="fas fa-upload btn-upload-icon"></i>
-                            <i class="fas fa-spinner fa-spin btn-upload-loader"></i>
                             <span class="btn-upload-text">Upload File</span>
                         </button>
                     </div>
@@ -2212,28 +2263,36 @@ if (isAdmin()) {
                 function initUploadAsync() {
                     var uploadForm = document.getElementById('uploadForm');
                     var uploadBtn = document.getElementById('uploadSubmitBtn');
-                    var uploadText = uploadBtn ? uploadBtn.querySelector('.btn-upload-text') : null;
-                    var uploadIcon = uploadBtn ? uploadBtn.querySelector('.btn-upload-icon') : null;
-                    var uploadLoader = uploadBtn ? uploadBtn.querySelector('.btn-upload-loader') : null;
                     var progressWrap = document.getElementById('uploadProgressWrap');
                     var progressFill = document.getElementById('uploadProgressFill');
                     var progressPct = document.getElementById('uploadProgressPct');
                     var progressText = document.getElementById('uploadProgressText');
                     var statusNote = document.getElementById('uploadStatusNote');
+                    var uploadUiWatchdog = null;
 
                     if (!uploadForm || !uploadBtn || uploadForm.dataset.asyncBound === '1') return;
                     uploadForm.dataset.asyncBound = '1';
 
                     function setUploadBusy(isBusy) {
+                        if (!uploadBtn) return;
                         uploadBtn.disabled = !!isBusy;
-                        if (uploadText) uploadText.textContent = isBusy ? 'Uploading File' : 'Upload File';
-                        if (uploadIcon) uploadIcon.style.display = isBusy ? 'none' : 'inline-flex';
-                        if (uploadLoader) uploadLoader.style.display = isBusy ? 'inline-flex' : 'none';
+                        uploadBtn.setAttribute('aria-busy', isBusy ? 'true' : 'false');
+                        if (isBusy) {
+                            uploadBtn.classList.add('is-uploading');
+                            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin btn-upload-loader" aria-hidden="true"></i><span class="btn-upload-text">Uploading File</span>';
+                        } else {
+                            uploadBtn.classList.remove('is-uploading');
+                            uploadBtn.innerHTML = '<i class="fas fa-upload btn-upload-icon" aria-hidden="true"></i><span class="btn-upload-text">Upload File</span>';
+                        }
                     }
 
                     function setUploadProgress(percent, label) {
                         var safe = Math.max(0, Math.min(100, percent || 0));
-                        if (progressWrap) progressWrap.classList.add('active');
+                        if (progressWrap) {
+                            progressWrap.hidden = false;
+                            progressWrap.style.display = 'block';
+                            progressWrap.classList.add('active');
+                        }
                         if (progressFill) progressFill.style.width = safe + '%';
                         if (progressPct) progressPct.textContent = Math.round(safe) + '%';
                         if (progressText && label) progressText.textContent = label;
@@ -2246,8 +2305,49 @@ if (isAdmin()) {
                         statusNote.classList.toggle('error', !!isError);
                     }
 
+                    function forceUploadIdle() {
+                        setUploadBusy(false);
+                        if (progressFill) progressFill.style.width = '0%';
+                        if (progressPct) progressPct.textContent = '0%';
+                        if (progressText) progressText.textContent = 'Preparing upload...';
+                    }
+
                     function fallbackSubmit() {
+                        forceUploadIdle();
                         uploadForm.submit();
+                    }
+
+                    function startUploadUiWatchdog() {
+                        if (uploadUiWatchdog) {
+                            window.clearInterval(uploadUiWatchdog);
+                            uploadUiWatchdog = null;
+                        }
+                        uploadUiWatchdog = window.setInterval(function() {
+                            if (!uploadBtn) return;
+                            var statusText = statusNote ? (statusNote.textContent || '').toLowerCase() : '';
+                            var successShown = !!statusNote
+                                && statusNote.classList.contains('active')
+                                && !statusNote.classList.contains('error')
+                                && (statusText.indexOf('uploaded successfully') !== -1 || statusText.indexOf('upload complete') !== -1);
+                            var stillBusy = uploadBtn.getAttribute('aria-busy') === 'true';
+                            var requestIdle = uploadForm.dataset.uploading !== '1';
+
+                            if (successShown || (requestIdle && stillBusy)) {
+                                forceUploadIdle();
+                            }
+
+                            if (requestIdle && !stillBusy) {
+                                window.clearInterval(uploadUiWatchdog);
+                                uploadUiWatchdog = null;
+                            }
+                        }, 140);
+
+                        window.setTimeout(function() {
+                            if (uploadUiWatchdog) {
+                                window.clearInterval(uploadUiWatchdog);
+                                uploadUiWatchdog = null;
+                            }
+                        }, 12000);
                     }
 
                     uploadForm.addEventListener('submit', function(e) {
@@ -2306,7 +2406,10 @@ if (isAdmin()) {
                             return;
                         }
 
+                        if (uploadForm.dataset.uploading === '1') return;
+                        uploadForm.dataset.uploading = '1';
                         setUploadBusy(true);
+                        startUploadUiWatchdog();
                         setUploadStatus('', false);
                         setUploadProgress(0, 'Preparing upload...');
 
@@ -2317,10 +2420,24 @@ if (isAdmin()) {
                             setUploadProgress(pct, pct < 95 ? 'Uploading file...' : 'Finalizing publish...');
                         };
                         xhr.onerror = function() {
-                            setUploadBusy(false);
+                            forceUploadIdle();
                             setUploadProgress(0, 'Preparing upload...');
                             setUploadStatus('Upload failed. Please try again.', true);
                             if (typeof showToast === 'function') showToast('Upload failed. Please try again.', 'error', 4200);
+                        };
+                        xhr.onloadend = function() {
+                            uploadForm.dataset.uploading = '0';
+                            window.setTimeout(function() {
+                                forceUploadIdle();
+                            }, 60);
+                            if (uploadUiWatchdog) {
+                                window.setTimeout(function() {
+                                    if (uploadUiWatchdog) {
+                                        window.clearInterval(uploadUiWatchdog);
+                                        uploadUiWatchdog = null;
+                                    }
+                                }, 220);
+                            }
                         };
                         xhr.onload = function() {
                             var data = null;
@@ -2332,23 +2449,48 @@ if (isAdmin()) {
                             }
 
                             if (xhr.status >= 200 && xhr.status < 300 && data && data.success) {
+                                forceUploadIdle();
                                 setUploadProgress(100, 'Published to user library');
                                 setUploadStatus(data.message || 'Upload complete.', false);
-                                if (typeof showToast === 'function') showToast(data.message || 'Upload complete.', 'success', 3200);
-                                var nextTab = data.tab || 'add-file';
                                 window.setTimeout(function() {
-                                    window.location.href = 'dashboard.php#' + nextTab;
-                                }, 900);
+                                    if (progressWrap) {
+                                        progressWrap.classList.remove('active');
+                                        progressWrap.style.display = 'none';
+                                        progressWrap.hidden = true;
+                                    }
+                                    if (progressFill) progressFill.style.width = '0%';
+                                    if (progressPct) progressPct.textContent = '0%';
+                                    if (progressText) progressText.textContent = 'Preparing upload...';
+                                    if (statusNote) {
+                                        statusNote.textContent = '';
+                                        statusNote.classList.remove('active', 'error');
+                                    }
+                                }, 150);
+                                if (typeof showToast === 'function') showToast(data.message || 'Upload complete.', 'success', 3200);
                                 return;
                             }
 
-                            setUploadBusy(false);
+                            forceUploadIdle();
                             setUploadProgress(0, 'Preparing upload...');
                             var msg = (data && data.message) ? data.message : 'Upload failed. Please try again.';
                             setUploadStatus(msg, true);
                             if (typeof showToast === 'function') showToast(msg, 'error', 4200);
                         };
                         xhr.send(formData);
+                    });
+
+                    window.addEventListener('pageshow', function() {
+                        uploadForm.dataset.uploading = '0';
+                        forceUploadIdle();
+                        if (progressWrap) {
+                            progressWrap.classList.remove('active');
+                            progressWrap.style.display = 'none';
+                            progressWrap.hidden = true;
+                        }
+                        if (statusNote) {
+                            statusNote.textContent = '';
+                            statusNote.classList.remove('active', 'error');
+                        }
                     });
                 }
 
@@ -2899,6 +3041,20 @@ if (isAdmin()) {
             }, ttl);
         }
 
+        function toastFlashMessages() {
+            var flashes = document.querySelectorAll('.flash-message');
+            if (!flashes || !flashes.length) return;
+            flashes.forEach(function(el) {
+                var textEl = el.querySelector('span');
+                var message = (textEl ? textEl.textContent : el.textContent || '').trim();
+                if (!message) return;
+                var type = el.classList.contains('flash-error') ? 'error' : 'success';
+                showToast(message, type, type === 'error' ? 4200 : 3200);
+                el.style.display = 'none';
+                el.setAttribute('aria-hidden', 'true');
+            });
+        }
+
         function deleteFile(id, type) {
             if (!confirm('Delete this file?')) return false;
             fetch('dashboard.php?delete=' + id + '&type=' + type + '&ajax=1')
@@ -3387,6 +3543,7 @@ if (isAdmin()) {
                 updateAdminPageTitle(activeTabEl.id.replace(/^tab-/, ''));
             }
             applyAdminSearch();
+            toastFlashMessages();
         })();
 
         // === FILE RENAME MODAL ===
